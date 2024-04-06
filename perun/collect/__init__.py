@@ -53,6 +53,7 @@ def lazy_get_cli_commands() -> list[Callable[..., Any]]:
     import perun.collect.time.run as time_run
     import perun.collect.trace.run as trace_run
     import perun.collect.ktrace.run as ktrace_run
+    import perun.collect.python.run as python_run
 
     return [
         bounds_run.bounds,
@@ -62,4 +63,5 @@ def lazy_get_cli_commands() -> list[Callable[..., Any]]:
         time_run.time,
         trace_run.trace,
         ktrace_run.ktrace,
+        python_run.python,
     ]
