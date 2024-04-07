@@ -4,6 +4,7 @@ perun_collect_python_files = files(
     '__init__.py',
     'run.py',
     'collect_events.py',
+    'parser.py',
 )
 
 py3.install_sources(

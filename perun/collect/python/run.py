@@ -1,15 +1,13 @@
 from typing import Any
 import subprocess
-import time
 import os
 
 import click
 
+from perun.collect.python import parser
 from perun.logic import runner
 from perun.utils import log
-from perun.utils.common import script_kit
-from perun.utils.structs import Executable, CollectStatus
-from perun.utils.external import commands
+from perun.utils.structs import CollectStatus
 
 
 def before(**kwargs):
@@ -28,7 +26,6 @@ def collect(**kwargs):
         current_dir = os.path.dirname(os.path.realpath(__file__))
         script_path = os.path.join(current_dir, 'collect_events.py')
         args = [kwargs['filename']]
-        args.append('True') if kwargs['cache'] else args.append('False')
         if kwargs['filter']:
             args.append(';'.join(map(str, kwargs['filter'])))
         result = subprocess.run(['python3.12', script_path] + args, capture_output=True, text=True, check=True)
@@ -40,6 +37,12 @@ def collect(**kwargs):
 
 
 def after(**kwargs):
+    resources = parser.parse_events()
+    kwargs["profile"] = {
+        "global": {
+            "resources": resources,
+        }
+    }
     return CollectStatus.OK, "", dict(kwargs)
 
 
@@ -47,12 +50,6 @@ def after(**kwargs):
 @click.pass_context
 @click.argument(
     'filename',
-)
-@click.option(
-    '--cache',
-    '-c',
-    is_flag=True,
-    help='Enable the creation of a cache file for captured events.'
 )
 @click.option(
     '--filter',

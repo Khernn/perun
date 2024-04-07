@@ -2,7 +2,6 @@ from contextlib import contextmanager
 import sys
 import time
 import threading
-import argparse
 import os
 
 function_metrics = []
@@ -10,7 +9,6 @@ threading_lock = threading.Lock()
 filter_list = [__file__, 'frozen']
 event_cache_file = ''
 events_to_save = []
-use_cache = False
 
 
 def save_events_to_file():
@@ -29,15 +27,11 @@ def capture_event(event_type, function_code, *args):
     event_key = f"{function_code.co_filename}:{function_code.co_name}:{thread_id}"
     current_time = time.perf_counter()
 
-    if use_cache:
-        event = (event_type, event_key, current_time)
-        with threading_lock:
-            events_to_save.append(event)
-            if len(events_to_save) >= 100:
-                save_events_to_file()
-    else:
-        with threading_lock:
-            function_metrics.append((event_type, event_key, current_time))
+    event = (event_type, event_key, current_time)
+    with threading_lock:
+        events_to_save.append(event)
+        if len(events_to_save) >= 100:
+            save_events_to_file()
 
 
 def register_event_callback(tool_id, event, capture_function):
@@ -88,20 +82,14 @@ def monitor(tool_id: int):
 
 if __name__ == "__main__":
     filename = sys.argv[1]
-    use_cache = True if sys.argv[2] == 'True' else False
     try:
-        filter_list.extend(sys.argv[3].split(';'))
-        print(filter_list)
+        filter_list.extend(sys.argv[2].split(';'))
     except IndexError:
         pass
 
-    if use_cache:
-        event_cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cache')
-        if not os.path.exists(event_cache_dir):
-            os.makedirs(event_cache_dir)
-        event_cache_file = os.path.join(event_cache_dir, 'events.cache')
-        with open(event_cache_file, 'w') as f:
-            pass
+    event_cache_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'events.cache')
+    with open(event_cache_file, 'w') as f:
+        pass
 
     with open(filename, 'r') as file:
         code = compile(file.read(), filename, 'exec')
