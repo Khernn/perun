@@ -66,6 +66,8 @@ def draw_flame_graph(profile: Profile, height: int, width: int = 1200, title: st
     """
     # converting profile format to format suitable to Flame graph visualization
     flame = convert.to_flame_graph_format(profile)
+    for item in flame:
+        print(item)
 
     header = profile["header"]
     profile_type = header["type"]

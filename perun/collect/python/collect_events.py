@@ -14,7 +14,7 @@ events_to_save = []
 def save_events_to_file():
     with open(event_cache_file, 'a') as f:
         for event in events_to_save:
-            event_str = f"{event[0]},{event[1]},{event[2]}\n"
+            event_str = f"{event[0]},{event[1]},{event[2]},{event[3]}\n"
             f.write(event_str)
     events_to_save.clear()
 
@@ -24,10 +24,11 @@ def capture_event(event_type, function_code, *args):
         return
 
     thread_id = threading.get_ident()
-    event_key = f"{function_code.co_filename}:{function_code.co_name}:{thread_id}"
+    event_key = f"{function_code.co_filename}:{function_code.co_name}:{function_code.co_firstlineno}:{thread_id}"
     current_time = time.perf_counter()
+    event_returnval_or_exception = args[0] if args else None
 
-    event = (event_type, event_key, current_time)
+    event = (event_type, event_key, current_time, repr(event_returnval_or_exception))
     with threading_lock:
         events_to_save.append(event)
         if len(events_to_save) >= 100:
@@ -97,6 +98,5 @@ if __name__ == "__main__":
     try:
         with monitor(2):
             exec(code, globals(), locals())
-        end_time = time.perf_counter()
     except Exception as e:
         print(e)

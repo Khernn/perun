@@ -1,2 +1,2 @@
-COLLECTOR_TYPE = "python"
-COLLECTOR_DEFAULT_UNITS = {"time": "seconds"}
+COLLECTOR_TYPE = "time"
+COLLECTOR_DEFAULT_UNITS = {"time" : "seconds"}

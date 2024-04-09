@@ -7,6 +7,9 @@ function_metrics = []
 function_metrics_out = {}
 threading_lock = threading.Lock()
 call_stacks = {}
+thread_stacks = {}
+thread_parents = {}
+first_event_for_thread = {}
 
 
 def event_start_or_resume(event_key, current_time, call_stack):
@@ -19,8 +22,8 @@ def event_start_or_resume(event_key, current_time, call_stack):
         'exceptions': [],
     }
 
-    call_stack.append((event_key, call_info))
     with threading_lock:
+        call_stack.append((event_key, call_info))
         if event_key not in function_metrics_out:
             function_metrics_out[event_key] = []
         function_metrics_out[event_key].append(call_info)
@@ -51,7 +54,11 @@ def update_call_info(call_info, current_time, call_stack):
 
 def get_call_stack(thread_id):
     if thread_id not in call_stacks:
-        call_stacks[thread_id] = []
+        parent_thread_id = thread_parents.get(thread_id, None)
+        if parent_thread_id in call_stacks:
+            call_stacks[thread_id] = call_stacks[parent_thread_id].copy()
+        else:
+            call_stacks[thread_id] = []
     return call_stacks[thread_id]
 
 
@@ -59,64 +66,83 @@ def process_data():
     with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'events.cache'), 'r') as file:
         for line in file.readlines():
             parts = line.strip().split(',')
-            event_tuple = (parts[0], parts[1], float(parts[2]))
+            event_tuple = (parts[0], parts[1], float(parts[2]), parts[3])
             function_metrics.append(event_tuple)
+
     for event in function_metrics:
         event_type = event[0]
         event_key = event[1]
         time = event[2]
+        event_exception = event[3]
 
         event_key_parts = event_key.split(":")
         thread_id = event_key_parts[-1]
 
+        if thread_id not in first_event_for_thread and (event_type == 'PY_START' or event_type == 'PY_RESUME'):
+            first_event_for_thread[thread_id] = event
+
+            if not thread_parents:
+                thread_parents[thread_id] = None
+            else:
+                for prev_event in function_metrics[:function_metrics.index(event)]:
+                    if thread_id not in prev_event:
+                        parent_thread_id = prev_event[1].rsplit(":", 1)[-1]
+                        thread_parents[thread_id] = parent_thread_id
+                        break
+
+        if thread_id not in thread_stacks:
+            thread_stacks[thread_id] = []
+            thread_stacks[thread_id].append(event_key)
         call_stack = get_call_stack(thread_id)
+        thread_stacks[thread_id].append(call_stack.copy())
         if event_type in ['PY_START', 'PY_RESUME']:
             event_start_or_resume(event_key, time, call_stack)
         elif event_type in ['PY_RETURN', 'PY_YIELD']:
+            for event_key_start in thread_stacks[thread_id]:
+                if event_key_start == event_key:
+                    del thread_stacks[thread_id]
             event_return_or_yield(time, call_stack)
         elif event_type in ['PY_THROW', 'PY_UNWIND']:
-            event_exception(time, call_stack, Exception)
+            for event_key_start in thread_stacks[thread_id]:
+                if event_key_start == event_key:
+                    del thread_stacks[thread_id]
+            event_exception(time, call_stack, event_exception)
 
 
-def append_trace_item(simplified_trace, item, count):
-    if count > 1:
-        simplified_trace.append(f"... {item} (x{count})")
-    elif item is not None:
-        simplified_trace.append(item)
-
-
-def simplify_trace(trace):
-    simplified_trace = []
-    last_seen, repeat_count = None, 1
-
-    for item in trace:
-        if item == last_seen:
-            repeat_count += 1
-        else:
-            if last_seen is not None:
-                append_trace_item(simplified_trace, last_seen, repeat_count)
-            last_seen, repeat_count = item, 1
-
-    append_trace_item(simplified_trace, last_seen, repeat_count)
-    return simplified_trace
+def get_trace(call_stack):
+    trace = []
+    for item in call_stack:
+        if item is not None:
+            parts = item.split(':')
+            trace_info = {
+                "source": parts[0],
+                "function": parts[1],
+                "line": int(parts[2]),
+            }
+            trace.append(trace_info)
+    return trace
 
 
 def parse_events():
-    print('Parsing events')
     process_data()
-    # print("Function Path:Function Name:TID | Call Count | Total Exclusive Time | Total Inclusive Time | Exceptions Count | Trace\n")
-    # for key, calls in function_metrics_out.items():
-    #     for call in calls:
-    #         trace = simplify_trace([f"{t[0]}" for t in call['trace']])
-    #         trace_str = " -> ".join(trace)
-    #         print(f"{key} | {len(calls)} | {call['exclusive_time']:.6f} | {call['inclusive_time']:.6f} | {len(call['exceptions'])} | {trace_str}\n")
 
     resources = []
-    for key in function_metrics_out.keys():
-        resources.append(
-            {
-                "amount": int(1),
-                "uid": key,
+    for key, calls in function_metrics_out.items():
+        for call in calls:
+            parts = key.split(':')
+            uid = {
+                "source": parts[0],
+                "function": parts[1],
+                "line": int(parts[2]),
             }
-        )
+            resources.append(
+                {
+                    "amount": float(call['exclusive_time']),
+                    "uid": uid,
+                    "tid": parts[-1],
+                    "type": "time",
+                    "trace": get_trace([f"{t[0]}" for t in call['trace']]),
+                    # "exception": call[1]['exceptions'],
+                }
+            )
     return resources
