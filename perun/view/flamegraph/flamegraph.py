@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 import os
 import tempfile
+import perun.view.flamegraph.flamegraph_builder as flamegraph
 
 # Third-Party Imports
 
@@ -66,8 +67,6 @@ def draw_flame_graph(profile: Profile, height: int, width: int = 1200, title: st
     """
     # converting profile format to format suitable to Flame graph visualization
     flame = convert.to_flame_graph_format(profile)
-    for item in flame:
-        print(item)
 
     header = profile["header"]
     profile_type = header["type"]
@@ -75,24 +74,4 @@ def draw_flame_graph(profile: Profile, height: int, width: int = 1200, title: st
     title = title if title != "" else f"{profile_type} consumption of {cmd} {workload}"
     units = header["units"][profile_type]
 
-    with tempfile.NamedTemporaryFile(delete=False) as tmp:
-        tmp.write("".join(flame).encode("utf-8"))
-        tmp.close()
-        cmd = " ".join(
-            [
-                script_kit.get_script("flamegraph.pl"),
-                tmp.name,
-                "--title",
-                f'"{title}"',
-                "--countname",
-                f"{units}",
-                "--reverse",
-                "--width",
-                str(width),
-                "--height",
-                str(height),
-            ]
-        )
-        out, _ = commands.run_safely_external_command(cmd)
-        os.remove(tmp.name)
-    return out.decode("utf-8")
+    return flamegraph.prepare_resources(flame, title, units, width, height, True)
