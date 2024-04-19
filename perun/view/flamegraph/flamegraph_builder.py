@@ -30,7 +30,7 @@ node = {}
 tmp = {}
 
 
-def flow(last, this, v, d=None):
+def flow(last, this, value, exceptions, delta=None):
     len_a = len(last) - 1
     len_b = len(this) - 1
 
@@ -43,20 +43,22 @@ def flow(last, this, v, d=None):
     len_same = i
 
     for i in range(len_a, len_same - 1, -1):
-        k = f"{last[i]};{i}"
-        # Move data from Tmp to Node and clear Tmp
-        if k in tmp:
-            node[f"{k};{v}"] = {'stime': tmp.pop(k, {}).get('stime', None)}
-            if 'delta' in tmp.get(k, {}):
-                node[f"{k};{v}"]['delta'] = tmp.pop(k).get('delta', None)
-            if k in tmp:  # check again after modifications
-                del tmp[k]
+        key = f"{last[i]};{i}"
+        # Retrieve the item once and then use its data
+        item_data = tmp.pop(key, {})
+        node_entry = node.setdefault(f"{key};{value}", {})
+        node_entry['stime'] = item_data.get('stime')
+        node_entry['delta'] = item_data.get('delta')
+        node_entry['exceptions'] = item_data.get('exceptions')
 
     for i in range(len_same, len_b + 1):
-        k = f"{this[i]};{i}"
-        tmp.setdefault(k, {}).setdefault('stime', v)
-        if d is not None:
-            tmp[k]['delta'] = tmp[k].get('delta', 0) + (d if i == len_b else 0)
+        key = f"{this[i]};{i}"
+        item = tmp.setdefault(key, {})
+        item['stime'] = value
+        if delta is not None:
+            item['delta'] = item.get('delta', 0) + delta
+        tmp[key]['exceptions'] = exceptions
+        print(exceptions)
 
     return this
 
@@ -67,22 +69,22 @@ def get_data(profile):
         item = item.rstrip()
         if stack_reverse:
             # Match the pattern to capture the stack trace and samples
-            match = re.match(r'^(.*)\s+?(\d+(?:\.\d*)?)$', item)
+            match = re.match(r'^(.*)\s+(\d+(?:\.\d*)?)\s*(\[[^\]]*\])?$', item)
             if match:
-                stack, samples = match.groups()
+                stack, samples, exceptions = match.groups()
                 samples2 = None
 
                 # Check for an additional sample value in the stack trace
-                match = re.match(r'^(.*)\s+?(\d+(?:\.\d*)?)$', stack)
+                match = re.match(r'^(.*)\s+(\d+(?:\.\d*)?)\s*(\[[^\]]*\])?$', stack)
                 if match:
-                    stack, samples2 = match.groups()
+                    stack, samples2, exceptions = match.groups()
                     # Reverse the stack trace for processing and append both samples if there's an additional sample
                     reversed_stack = ';'.join(reversed(stack.split(';')))
-                    data.insert(0, f"{reversed_stack} {samples} {samples2}")
+                    data.insert(0, f"{reversed_stack} {samples} {samples2} {exceptions}")
                 else:
                     # Reverse the stack trace and append the sample
                     reversed_stack = ';'.join(reversed(stack.split(';')))
-                    data.insert(0, f"{reversed_stack} {samples}")
+                    data.insert(0, f"{reversed_stack} {samples} {exceptions}")
             else:
                 # Directly insert the line if no matching pattern is found
                 data.insert(0, item)
@@ -100,16 +102,16 @@ def process_frames(sorted_data):
 
     for item in sorted_data:
         item = item.strip()
-
-        match = re.match(r'^(.*)\s+(\d+(?:\.\d*)?)$', item)
+        match = re.match(r'^(.*)\s+(\d+(?:\.\d*)?)\s*(\[[^\]]*\])?$', item)
         if not match:
             continue
-
-        stack, samples = match.groups()
+        stack, samples, exceptions = match.groups()
         samples = float(samples)
 
+        print(stack, samples, exceptions)
+
         samples2 = None
-        match = re.match(r'^(.*)\s+(\d+(?:\.\d*)?)$', stack)
+        match = re.match(r'^(.*)\s+(\d+(?:\.\d*)?)\s*(\[[^\]]*\])?$', stack)
         if match:
             stack, samples2 = match.groups()
             samples2 = float(samples2)
@@ -119,11 +121,11 @@ def process_frames(sorted_data):
         else:
             delta = None
 
-        last = flow(last, ['', *stack.split(';')], time, delta)
+        last = flow(last, ['', *stack.split(';')], time, exceptions, delta)
 
         time += samples2 if samples2 is not None else samples
 
-    flow(last, [], time, delta)
+    flow(last, [], time, '[]', delta)
 
 
 # def check_time(): TODO
@@ -142,7 +144,7 @@ def todo():
     width_per_time = (image_width - 2 * x_padding) / time
     min_width /= width_per_time
 
-    for id, current_node in node.items():
+    for id, current_node in node.copy().items():
         func, depth, end_time = id.split(";")
         depth = int(depth)
         end_time = float(end_time)
@@ -635,7 +637,10 @@ def draw_frames(svg, image_height, count_name):
 
         nameattr = {'title': info}
         svg.group_start(nameattr)
-        svg.filled_rectangle(x1, y1, x2, y2, 'green', 'rx="2" ry="2"')
+        if current_node['exceptions'] != '[]':
+            svg.filled_rectangle(x1, y1, x2, y2, 'red', 'rx="2" ry="2"')
+        else:
+            svg.filled_rectangle(x1, y1, x2, y2, 'green', 'rx="2" ry="2"')
         chars = int((x2 - x1) / (font_size * font_width))
         text = ''
 

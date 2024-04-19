@@ -73,7 +73,7 @@ def process_data():
         event_type = event[0]
         event_key = event[1]
         time = event[2]
-        event_exception = event[3]
+        event_exception_var = event[3]
 
         event_key_parts = event_key.split(":")
         thread_id = event_key_parts[-1]
@@ -106,7 +106,7 @@ def process_data():
             for event_key_start in thread_stacks[thread_id]:
                 if event_key_start == event_key:
                     del thread_stacks[thread_id]
-            event_exception(time, call_stack, event_exception)
+            event_exception(time, call_stack, event_exception_var)
 
 
 def get_trace(call_stack):
@@ -142,7 +142,7 @@ def parse_events():
                     "tid": parts[-1],
                     "type": "time",
                     "trace": get_trace([f"{t[0]}" for t in call['trace']]),
-                    # "exception": call[1]['exceptions'],
+                    "exceptions": call['exceptions'],
                 }
             )
     return resources
