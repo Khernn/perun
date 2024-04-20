@@ -3,7 +3,7 @@ perun_collect_python_dir = perun_collect_dir / 'python'
 perun_collect_python_files = files(
     '__init__.py',
     'run.py',
-    'collect_events.py',
+    'collect.py',
     'parser.py',
 )
 

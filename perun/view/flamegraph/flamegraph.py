@@ -4,8 +4,7 @@ from __future__ import annotations
 # Standard Imports
 from typing import TYPE_CHECKING
 import os
-import tempfile
-import perun.view.flamegraph.flamegraph_builder as flamegraph
+import perun.view.flamegraph.svg_builder as svg_builder
 
 # Third-Party Imports
 
@@ -72,6 +71,6 @@ def draw_flame_graph(profile: Profile, height: int, width: int = 1200, title: st
     profile_type = header["type"]
     cmd, workload = (header["cmd"], header["workload"])
     title = title if title != "" else f"{profile_type} consumption of {cmd} {workload}"
-    units = header["units"][profile_type]
+    # units = header["units"][profile_type]
 
-    return flamegraph.prepare_resources(flame, title, units, width, height, True)
+    return svg_builder.build_svg(flame, title, width, height, True)

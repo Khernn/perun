@@ -20,18 +20,26 @@ def save_events_to_file():
 
 
 def capture_event(event_type, function_code, *args):
-    if filter_list and any(ignore in function_code.co_filename for ignore in filter_list):
+    if filter_list and any(ignore in function_code.co_filename or ignore in function_code.co_name for ignore in filter_list):
         return
 
     thread_id = threading.get_ident()
-    event_key = f"{function_code.co_filename}:{function_code.co_name}:{function_code.co_firstlineno}:{thread_id}"
+    function_name = function_code.co_name.replace(' ', '_') if ' ' in function_code.co_name else function_code.co_name
+    event_key = f"{function_code.co_filename}:{function_name}:{function_code.co_firstlineno}:{thread_id}"
     current_time = time.perf_counter()
-    event_returnval_or_exception = args[0] if args else None
 
-    event = (event_type, event_key, current_time, repr(event_returnval_or_exception))
+    exception = None
+    if event_type in ['PY_THROW', 'PY_UNWIND']:
+        try:
+            event_exception = args[0] if args else None
+            exception = repr(event_exception)
+        except Exception:
+            exception = "Unknown exception"
+
+    event = (event_type, event_key, current_time, exception)
     with threading_lock:
         events_to_save.append(event)
-        if len(events_to_save) >= 100:
+        if sys.getsizeof(events_to_save) >= 131072:  # 128 KB = 131072 bytes
             save_events_to_file()
 
 
@@ -91,12 +99,19 @@ if __name__ == "__main__":
     event_cache_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'events.cache')
     with open(event_cache_file, 'w') as f:
         pass
+    main_dir = os.path.dirname(filename)
 
+    if main_dir not in sys.path:
+        sys.path.append(main_dir)
+
+    sys.argv = [filename]
     with open(filename, 'r') as file:
         code = compile(file.read(), filename, 'exec')
 
+    start_time = time.perf_counter()
     try:
         with monitor(2):
-            exec(code, globals(), locals())
+            exec(code)
     except Exception as e:
         print(e)
+    print(f'Code execution: {round(time.perf_counter() - start_time, 5)} sec')

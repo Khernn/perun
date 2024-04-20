@@ -139,7 +139,8 @@ def to_flame_graph_format(profile: Profile) -> list[str]:
                     stack_str += line + ";"
                 if stack_str and stack_str.endswith(";"):
                     final = stack_str[:-1]
-                    final += " " + str(alloc["amount"]) + " " + (str(alloc["exceptions"]) if alloc["exceptions"] else "[]") + "\n"
+                    final += (" " + str(alloc["amount"]) + " " + (str(alloc["ncalls"]) if "ncalls" in alloc and alloc["ncalls"] else "0") + " " + (
+                        str(alloc["exceptions"]) if "exceptions" in alloc and alloc["exceptions"] else "[]") + "\n")
                     stacks.append(final)
 
     return stacks

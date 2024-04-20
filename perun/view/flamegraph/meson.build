@@ -5,7 +5,6 @@ perun_view_flamegraph_files = files(
     'flamegraph.py',
     'run.py',
     'svg_builder.py',
-    'flamegraph_builder.py'
 )
 
 py3.install_sources(
