@@ -56,7 +56,7 @@ def draw_flame_graph_difference(
 def draw_flame_graph(profile: Profile, height: int, width: int = 1200, title: str = "") -> str:
     """Draw Flame graph from profile.
 
-        To create Flame graphs we use perl script created by Brendan Gregg.
+        To create Flame graphs we use python script inspired by Brendan Greggs flamegraph.pl
         https://github.com/brendangregg/FlameGraph/blob/master/flamegraph.pl
 
     :param profile: the memory profile

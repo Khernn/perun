@@ -1,11 +1,23 @@
 import re
-
+from typing import List, Tuple
 
 class SVG:
+    """
+    A class to construct and manage SVG content dynamically.
+    Inspired by Brendan Gregg flamegraph implementation see:
+    https://github.com/brendangregg/FlameGraph.
+    """
     def __init__(self):
         self.svg_content = ""
 
     def add_header(self, width: int, height: int) -> None:
+        """
+        Create SVG header with predefined namespace declarations and a doctype.
+
+        Args:
+            width (int): The width of the SVG canvas.
+            height (int): The height of the SVG canvas.
+        """
         header_content = f"""<?xml version="1.0" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
 <svg version="1.1" width="{width}" height="{height}" onload="init(evt)" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
@@ -15,34 +27,98 @@ class SVG:
         self.svg_content += header_content
 
     def add_styles(self, content: str) -> None:
+        """
+        Appends CSS styles directly to the SVG content.
+
+        Args:
+            content (str): A string containing style definitions.
+        """
         self.svg_content += content
 
     def start_group(self, attributes: dict) -> None:
+        """
+        Starts an SVG group element (<g>) or a link element (<a>) if hyperlink attributes are present.
+
+        Args:
+            attributes (dict): A dictionary of attributes for the group or link element.
+        """
         formatted_attributes = self.format_attributes(attributes, allowed_keys=['id', 'class'])
         extra_tag = self.handle_optional_links(attributes)
         self.svg_content += f'<{extra_tag} {formatted_attributes}>\n'
         self.include_optional_content(attributes)
 
     def end_group(self, attributes: dict) -> None:
+        """
+        Closes an SVG group or a link element.
+
+        Args:
+            attributes (dict): A dictionary of attributes which may indicate the element type to close.
+        """
         tag = 'a' if 'href' in attributes else 'g'
         self.svg_content += f'</{tag}>\n'
 
     def add_rectangle(self, x1: float, y1: float, x2: float, y2: float, fill: str, extra: str = "") -> None:
+        """
+        Adds a rectangle element to the SVG.
+
+        Args:
+            x1 (float): The x-coordinate of the rectangle's top-left corner.
+            y1 (float): The y-coordinate of the rectangle's top-left corner.
+            x2 (float): The x-coordinate of the rectangle's bottom-right corner.
+            y2 (float): The y-coordinate of the rectangle's bottom-right corner.
+            fill (str): The fill color of the rectangle.
+            extra (str): Additional attributes.
+        """
         width = x2 - x1
         height = y2 - y1
         self.svg_content += f'<rect x="{x1:.1f}" y="{y1:.1f}" width="{width:.1f}" height="{height:.1f}" fill="{fill}" {extra}/>\n'
 
     def add_text(self, element_id: str, x: float, y: float, string: str, extra: str = "") -> None:
+        """
+        Adds a text element to the SVG.
+
+        Args:
+            element_id (str): An optional ID for the text element.
+            x (float): The x-coordinate for the text placement.
+            y (float): The y-coordinate for the text baseline.
+            string (str): The text string to display.
+            extra (str): Additional attributes as a string.
+        """
         id_attr = f'id="{element_id}" ' if element_id else ''
         self.svg_content += f'<text {id_attr}x="{x:.2f}" y="{y}" {extra}>{string}</text>\n'
 
     def get_svg(self) -> str:
+        """
+        Returns the complete SVG content with the closing tag.
+
+        Returns:
+            str: The complete SVG content as a string.
+        """
         return f"{self.svg_content}</svg>\n"
 
     def format_attributes(self, attributes: dict, allowed_keys: list) -> str:
+        """
+        Formats and returns a string of SVG tag attributes filtered by allowed keys.
+
+        Args:
+            attributes (dict): A dictionary of all possible attributes.
+            allowed_keys (list): A list of keys that are allowed to be included in the output.
+
+        Returns:
+            str: A string of formatted SVG attributes suitable for direct inclusion in an SVG tag.
+        """
         return " ".join([f'{key}="{value}"' for key, value in attributes.items() if key in allowed_keys])
 
     def handle_optional_links(self, attributes: dict) -> str:
+        """
+        Determines the appropriate SVG tag ('a' for links or 'g' for groups) and formats the link-specific attributes if present.
+
+        Args:
+            attributes (dict): A dictionary of attributes which may contain hyperlink attributes.
+
+        Returns:
+            str: The tag name ('a' or 'g') followed by formatted link attributes if applicable.
+        """
         if 'href' in attributes:
             link_attrs = [f'xlink:href="{attributes["href"]}"', f'target="{attributes.get("target", "_top")}"']
             if 'a_extra' in attributes:
@@ -51,6 +127,12 @@ class SVG:
         return 'g'
 
     def include_optional_content(self, attributes: dict) -> None:
+        """
+        Includes optional SVG content such as titles or exceptions within a tag, based on the attributes provided.
+
+        Args:
+            attributes (dict): A dictionary containing optional content attributes like 'title' or 'exception'.
+        """
         if 'title' in attributes:
             self.svg_content += f'<title>{attributes["title"]}</title>\n'
         if 'exception' in attributes:
@@ -87,7 +169,19 @@ nodes = {}
 temp_storage = {}
 
 
-def add_styles_and_scripts(svg):
+def add_styles_and_scripts(svg: str) -> str:
+    """
+    Appends CSS styles and JavaScript scripts to the provided SVG content.
+
+    This function enhances the visual and interactive features of the SVG by injecting CSS for styling
+    and JavaScript for interactivity.
+
+    Args:
+        svg (str): A string containing the SVG content to be enhanced.
+
+    Returns:
+        str: The SVG content updated with additional style and script tags.
+    """
     styles_and_scripts = f'''
 <defs >
     <linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
@@ -533,7 +627,20 @@ def add_styles_and_scripts(svg):
     svg.add_styles(styles_and_scripts)
 
 
-def aggregate_stack_data(last_stack, current_stack, value, ncalls, exceptions):
+def aggregate_stack_data(last_stack: List[str], current_stack: List[str], value: float, ncalls: int, exceptions: List[str]) -> List[str]:
+    """
+    Aggregates stack trace data by comparing the last and current stack traces to determine divergences and update node information accordingly.
+
+    Args:
+        last_stack (List[str]): The previous stack trace as a list of function identifiers.
+        current_stack (List[str]): The current stack trace as a list of function identifiers.
+        value (float): Function call duration in seconds.
+        ncalls (int): The number of calls current function.
+        exceptions (List[str]): Any exceptions associated with the current function.
+
+    Returns:
+        List[str]: The updated current stack trace.
+    """
     # Calculate the length of last and current stack traces
     last_length = len(last_stack) - 1
     current_length = len(current_stack) - 1
@@ -565,7 +672,17 @@ def aggregate_stack_data(last_stack, current_stack, value, ncalls, exceptions):
     return current_stack
 
 
-def get_data(profile):
+def get_data(profile: List[str]) -> List[str]:
+    """
+    Processes a list of strings representing profiling data entries and optionally reverses the stack traces.
+
+    Args:
+        profile (List[str]): A list of strings, where each string contains data from profiling.
+
+    Returns:
+        List[str]: A list containing processed data entries.
+
+    """
     data = []
     for item in profile:
         item = item.rstrip()
@@ -588,7 +705,13 @@ def get_data(profile):
     return data
 
 
-def process_frames(sorted_data):
+def process_frames(sorted_data: List[str]) -> None:
+    """
+    Processes each frame from sorted profiling data, updating global execution time and aggregating data.
+
+    Args:
+        sorted_data (List[str]): A stack trace.
+    """
     global time
     last = []
 
@@ -605,7 +728,13 @@ def process_frames(sorted_data):
     aggregate_stack_data(last, [], time, 0, '[]')  # Final call to process any remaining data
 
 
-def calculate_depth_and_frames_width():
+def calculate_depth_and_frames_width() -> None:
+    """
+    Calculates the display width for each function unit and filters out nodes below a visibility threshold.
+
+    Raises:
+        ValueError: If a node is found without a start time, indicating incomplete or corrupted data.
+    """
     global time, min_width, nodes, max_depth, width_per_time
 
     # Calculate the width of each time unit based on the current settings
@@ -634,7 +763,20 @@ def calculate_depth_and_frames_width():
         del nodes[node_id]
 
 
-def get_color(function_calls, total_calls):
+def get_color(function_calls: int, total_calls: int) -> str:
+    """
+    Generates an RGB color string with varying shades of yellow based on the ratio of function calls to total calls.
+
+    Args:
+        function_calls (int): The number of calls for a particular function.
+        total_calls (int): The total number of calls across all functions.
+
+    Returns:
+        str: An RGB string representing the color.
+
+    Raises:
+        ValueError: If total_calls is zero to prevent division by zero errors.
+    """
     if total_calls == 0:
         raise ValueError("total_calls cannot be zero to prevent division by zero")
 
@@ -643,13 +785,34 @@ def get_color(function_calls, total_calls):
     return f"rgb(255, 255, {int(blue)})"
 
 
-def escape_html(text):
+def escape_html(text: str) -> str:
+    """
+    Escapes HTML special characters in text.
+
+    Args:
+        text (str): The text to be escaped.
+
+    Returns:
+        str: The escaped text with HTML special characters converted to HTML entities.
+    """
     return re.sub(r'[&<>"_]',
                   lambda x: {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '_': ''}[x.group()],
                   text)
 
 
-def calculate_frame_position(depth, time_offset, image_height, frame_padding):
+def calculate_frame_position(depth: int, time_offset: Tuple[float, float], image_height: int, frame_padding: int) -> Tuple[float, float, float, float]:
+    """
+    Calculates the position of a frame in the visualization.
+
+    Args:
+        depth (int): The depth of the frame in the call stack.
+        time_offset (Tuple[float, float]): A tuple representing the start and end time offsets of the frame.
+        image_height (int): The total height of the image.
+        frame_padding (int): The padding between frames at the same depth.
+
+    Returns:
+        Tuple[float, float, float, float]: The coordinates (x1, x2, y1, y2) of the frame.
+    """
     x1 = x_padding + time_offset[0] * width_per_time
     x2 = x_padding + time_offset[1] * width_per_time
     if icicle_graph:
@@ -661,7 +824,21 @@ def calculate_frame_position(depth, time_offset, image_height, frame_padding):
     return x1, x2, y1, y2
 
 
-def draw_frames(svg, image_height, calls,):
+def draw_frames(svg: SVG, image_height: int, calls: int) -> None:
+    """
+    Draws frames representing function calls on an SVG canvas.
+
+    Args:
+        svg (SVG): An instance of an SVG class responsible for SVG generation.
+        image_height (int): The total height of the SVG image.
+        calls (int): The total number of function calls, used for color calculation.
+
+    This function iterates through call stack,
+    calculates each function position, and draws it within an SVG group.
+
+    Each frame is represented as a rectangle with optional text. Frames are colored differently based
+    on whether they contain exceptions or based on the volume of calls.
+    """
     frame_padding = 1
     svg.start_group({'id': 'frames'})
 
@@ -686,7 +863,17 @@ def draw_frames(svg, image_height, calls,):
     svg.end_group({})
 
 
-def truncate_text(func_name, width):
+def truncate_text(func_name: str, width: float) -> str:
+    """
+    Truncates a function name to fit within a specified width.
+
+    Args:
+        func_name (str): The function name to be truncated.
+        width (float): The available width in pixels.
+
+    Returns:
+        str: The truncated function name.
+    """
     max_chars = int(width / (font_size * font_width))
     if max_chars < 3:
         return ""  # Not enough space for any meaningful text
@@ -695,7 +882,16 @@ def truncate_text(func_name, width):
     return func_name  # Return the original name if it fits
 
 
-def format_time_units(time_elapsed):
+def format_time_units(time_elapsed: float) -> str:
+    """
+    Formats a time duration into a readable string with appropriate units.
+
+    Args:
+        time_elapsed (float): The time duration in seconds.
+
+    Returns:
+        str: A string representation of the time duration with units adjusted to seconds, milliseconds, microseconds, or nanoseconds.
+    """
     if time_elapsed >= 1:  # More than 1 second
         return f"{time_elapsed:.2f} seconds"
     elif time_elapsed >= 0.001:  # More than 1 millisecond
@@ -706,7 +902,20 @@ def format_time_units(time_elapsed):
         return f"{time_elapsed * 1000000000:.2f} nanoseconds"
 
 
-def format_node_info(func, total_time, etime, stime, depth):
+def format_node_info(func: str, total_time: float, etime: float, stime: float, depth: int) -> str:
+    """
+    Generates a formatted string describing a node's information.
+
+    Args:
+        func (str): The function's name.
+        total_time (float): The total time recorded in the profiling.
+        etime (float): The end time of the function call.
+        stime (float): The start time of the function call.
+        depth (int): The depth of the function in the call stack.
+
+    Returns:
+        str: A formatted string containing the function's name, time elapsed, and its percentage of the total time.
+    """
     time_elapsed = etime - stime
     samples_txt = format_time_units(time_elapsed)
     if func == "" and depth == 0:
@@ -715,7 +924,21 @@ def format_node_info(func, total_time, etime, stime, depth):
     return f"{escape_html(func)} ({samples_txt}, {pct:.2f}%)"
 
 
-def build_flamegraph(title, calls):
+def build_flamegraph(title: str, calls: int) -> str:
+    """
+    Constructs an SVG-based flame graph for visualizing function calls.
+
+    Args:
+        title (str): The title to display at the top of the flame graph.
+        calls (int): The total number of functions calls to be visualized.
+
+    Returns:
+        str: An SVG string representing the complete flame graph visualization.
+
+    This function sets up the flame graph's dimensions based on the maximum depth of the call stack
+    and additional padding for titles and subtitles. It initializes the SVG, adds styles, scripts,
+    and constructs the various text and rectangle elements that make up the flame graph.
+    """
     global max_depth, frame_height
 
     image_height = ((max_depth + 1) * frame_height) + y_padding_title_included + y_padding_subtitle_included + 2 * y_padding_legend
@@ -747,7 +970,22 @@ def build_flamegraph(title, calls):
     return svg.get_svg()
 
 
-def build_svg(profile, title, width, height, reverse):
+def build_svg(profile: List[str], title: str, width: int, height: int, reverse: bool) -> str:
+    """
+    Constructs an SVG flame graph based on profiling data.
+
+    This function serves as the main entry point to process profiling data and generate a corresponding flame graph.
+
+    Args:
+        profile (List[str]): A list of strings representing the profiling data.
+        title (str): The title of the flame graph.
+        width (int): The width of the SVG canvas.
+        height (int): The default height of the SVG canvas.
+        reverse (bool): A flag to indicate whether the stack trace should be reversed.
+
+    Returns:
+        str: The complete SVG string representing the flame graph.
+    """
     global image_width, frame_height, stack_reverse
     image_width, frame_height, stack_reverse = width, height, reverse
 

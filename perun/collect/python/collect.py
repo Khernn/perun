@@ -3,6 +3,7 @@ import sys
 import time
 import threading
 import os
+from typing import Any, Callable
 
 function_metrics = []
 threading_lock = threading.Lock()
@@ -11,7 +12,10 @@ event_cache_file = ''
 events_to_save = []
 
 
-def save_events_to_file():
+def save_events_to_file() -> None:
+    """
+    Writes accumulated event data to a file and clears the cache.
+    """
     with open(event_cache_file, 'a') as f:
         for event in events_to_save:
             event_str = f"{event[0]},{event[1]},{event[2]},{event[3]}\n"
@@ -19,7 +23,15 @@ def save_events_to_file():
     events_to_save.clear()
 
 
-def capture_event(event_type, function_code, *args):
+def capture_event(event_type: str, function_code: Any, *args: Any) -> None:
+    """
+    Captures function execution events, filtering out those from unwanted sources.
+
+    Args:
+        event_type (str): Type of the event (e.g., 'PY_THROW', 'PY_UNWIND').
+        function_code (Any): Code object of the function where the event occurred.
+        *args (Any): Additional arguments related to the event.
+    """
     if filter_list and any(ignore in function_code.co_filename or ignore in function_code.co_name for ignore in filter_list):
         return
 
@@ -43,7 +55,15 @@ def capture_event(event_type, function_code, *args):
             save_events_to_file()
 
 
-def register_event_callback(tool_id, event, capture_function):
+def register_event_callback(tool_id: int, event: str, capture_function: Callable[..., None]) -> None:
+    """
+    Registers a callback for a specific monitoring event type.
+
+    Args:
+        tool_id (int): The identifier for the monitoring tool.
+        event (str): The event type to monitor.
+        capture_function (Callable[..., None]): The function to execute when the event occurs.
+    """
     if event in ['PY_START', 'PY_RESUME']:
         sys.monitoring.register_callback(
             tool_id, getattr(sys.monitoring.events, event),
@@ -64,7 +84,13 @@ def register_event_callback(tool_id, event, capture_function):
 
 
 @contextmanager
-def monitor(tool_id: int):
+def monitor(tool_id: int) -> None:
+    """
+    Context manager for monitoring function executions.
+
+    Args:
+        tool_id (int): The identifier for the monitoring tool.
+    """
     event_names = ['PY_START', 'PY_RETURN', 'PY_RESUME', 'PY_THROW', 'PY_YIELD', 'PY_UNWIND']
 
     sys.monitoring.use_tool_id(tool_id, "profile")
@@ -90,13 +116,15 @@ def monitor(tool_id: int):
 
 
 if __name__ == "__main__":
+    # Retrieve the script filename from command line arguments.
     filename = sys.argv[1]
     try:
+        # Extend the filter list with additional file names or identifiers to be ignored during event capture.
         filter_list.extend(sys.argv[2].split(';'))
     except IndexError:
         pass
 
-    event_cache_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'events.cache')
+    event_cache_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'events.log')
     with open(event_cache_file, 'w') as f:
         pass
     main_dir = os.path.dirname(filename)
@@ -108,10 +136,9 @@ if __name__ == "__main__":
     with open(filename, 'r') as file:
         code = compile(file.read(), filename, 'exec')
 
-    start_time = time.perf_counter()
     try:
+        # Use the monitor context manager to track events during code execution.
         with monitor(2):
             exec(code)
     except Exception as e:
         print(e)
-    print(f'Code execution: {round(time.perf_counter() - start_time, 5)} sec')

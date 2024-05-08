@@ -13,6 +13,11 @@ from perun.utils.structs import Executable, CollectStatus
 
 
 def before(**kwargs) -> tuple[CollectStatus, str, dict[str, Any]]:
+    """
+    Check for the required dependencies before collection starts.
+
+    :returns tuple: (return code, status message, updated kwargs)
+    """
     log.major_info("Checking for Dependencies")
     try:
         shutil.which('python3.12')
@@ -24,6 +29,12 @@ def before(**kwargs) -> tuple[CollectStatus, str, dict[str, Any]]:
 
 
 def collect(executable: Executable, **kwargs) -> tuple[CollectStatus, str, dict[str, Any]]:
+    """
+    Collects profiling data by executing a 'collect.py' script.
+
+    :param Executable executable: executable profiled command
+    :returns tuple: (return code, status message, updated kwargs)
+    """
     log.major_info("Collecting events")
     try:
         current_dir = os.path.dirname(os.path.realpath(__file__))
@@ -43,6 +54,12 @@ def collect(executable: Executable, **kwargs) -> tuple[CollectStatus, str, dict[
 
 
 def after(**kwargs) -> tuple[CollectStatus, str, dict[str, Any]]:
+    """
+    Parses events after collection and prepares the final profile.
+
+    :param dict kwargs: profile's header
+    :return tuple: (return code, status message, updated kwargs)
+    """
     log.major_info("Parse events")
     start_time = time.perf_counter()
     parsed_events = parser.ParseEvents()
@@ -57,10 +74,6 @@ def after(**kwargs) -> tuple[CollectStatus, str, dict[str, Any]]:
     return CollectStatus.OK, "", dict(kwargs)
 
 
-# def teardown():
-#     pass
-
-
 @click.command()
 @click.option(
     '--filter',
@@ -71,4 +84,41 @@ def after(**kwargs) -> tuple[CollectStatus, str, dict[str, Any]]:
 @click.pass_context
 # TODO: Consider adding an option to specify the path for Python 3.12.
 def python(ctx: click.Context, **kwargs: Any) -> None:
+    """
+    Generates `time` performance profile, capturing overall running times of
+    user defined and libraries python functions.
+
+    \b
+      * **Metric**: running `time`
+      * **Dependencies**: `none`
+      * **Default units**: `s`
+
+    This is a wrapper over the ``time`` linux utility and captures resources
+    in the following form:
+
+    .. code-block:: json
+
+        \b
+        {
+          "amount": 4.608009476214647e-06,
+          "uid": {
+            "source": "~/main.py",
+            "function": "fibonacci",
+            "line": 2
+          },
+          "tid": "139821382942720",
+          "type": "time",
+          "ncalls": 1,
+          "trace": [
+            {
+              "source": "~/main.py",
+              "function": "<module>",
+              "line": 1
+            }
+          ],
+          "exceptions": [
+            "ZeroDivisionError('division by zero')"
+          ]
+        }
+    """
     runner.run_collector_from_cli_context(ctx, "python", kwargs)
