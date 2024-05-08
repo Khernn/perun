@@ -70,6 +70,13 @@ def after(**kwargs) -> tuple[CollectStatus, str, dict[str, Any]]:
         }
     }
     log.minor_success("Parse events")
+    event_cache_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'events.log')
+
+    try:
+        os.remove(event_cache_file)
+    except Exception as e:
+        print(f"Error: {event_cache_file} : {e}")
+
     log.major_info(f'Finished in {round(time.perf_counter() - start_time, 5)} seconds.')
     return CollectStatus.OK, "", dict(kwargs)
 
